@@ -1,0 +1,469 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import StudentLayout from '../../components/StudentLayout';
+import apiService from '../../services/api';
+import './UploadPdfPage.css';
+
+const UploadPdfPage = () => {
+  const [user, setUser] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [dragActive, setDragActive] = useState(false);
+  
+  // Results state
+  const [results, setResults] = useState(null);
+  const [quizAnswers, setQuizAnswers] = useState({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [quizResults, setQuizResults] = useState(null);
+  
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      setUser(JSON.parse(userData));
+    } else {
+      navigate('/login');
+    }
+  }, [navigate]);
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (file.type === 'application/pdf') {
+        setSelectedFile(file);
+        setError('');
+      } else {
+        setError('Please upload a PDF file');
+      }
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.type === 'application/pdf') {
+        setSelectedFile(file);
+        setError('');
+      } else {
+        setError('Please upload a PDF file');
+      }
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      setError('Please select a file');
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+    setError('');
+    setSuccess('');
+    setResults(null);
+
+    try {
+      // Simulate progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 500);
+
+      const response = await apiService.processPdf(selectedFile);
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      if (response.success) {
+        setSuccess('PDF processed successfully!');
+        setResults(response.data);
+        setSelectedFile(null);
+      }
+    } catch (error) {
+      setError(error.message || 'Failed to process PDF');
+    } finally {
+      setUploading(false);
+      setTimeout(() => {
+        setUploadProgress(0);
+      }, 2000);
+    }
+  };
+
+  const handleAnswerSelect = (questionId, answer) => {
+    setQuizAnswers(prev => ({
+      ...prev,
+      [questionId]: answer
+    }));
+  };
+
+  const handleSubmitQuiz = async () => {
+    const answers = Object.entries(quizAnswers).map(([questionId, userAnswer]) => ({
+      questionId,
+      userAnswer
+    }));
+
+    if (answers.length !== results.quiz.questions.length) {
+      setError('Please answer all questions');
+      return;
+    }
+
+    try {
+      setError('');
+      const response = await apiService.submitQuizAnswers(answers, results.quiz);
+      
+      if (response.success) {
+        setQuizResults(response.data);
+        setQuizSubmitted(true);
+        setSuccess('Quiz submitted successfully!');
+      }
+    } catch (error) {
+      setError('Failed to submit quiz');
+    }
+  };
+
+  const handleReset = () => {
+    setResults(null);
+    setQuizAnswers({});
+    setQuizSubmitted(false);
+    setQuizResults(null);
+    setSelectedFile(null);
+    setError('');
+    setSuccess('');
+  };
+
+  if (!user) {
+    return <div className="loading">Loading...</div>;
+  }
+
+  return (
+    <StudentLayout user={user}>
+      <div className="upload-pdf-page">
+        <div className="page-header">
+          <h1>📄 Upload PDF</h1>
+          <p>Upload PDF files to get AI-powered summaries, quizzes, and learning insights</p>
+        </div>
+
+        {error && (
+          <div className="alert alert-error">
+            <span>⚠️</span>
+            <span>{error}</span>
+            <button onClick={() => setError('')}>✕</button>
+          </div>
+        )}
+
+        {success && (
+          <div className="alert alert-success">
+            <span>✓</span>
+            <span>{success}</span>
+            <button onClick={() => setSuccess('')}>✕</button>
+          </div>
+        )}
+
+        {!results ? (
+          <div className="upload-section">
+            <div
+              className={`upload-area ${dragActive ? 'drag-active' : ''}`}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+            >
+              <div className="upload-icon">📄</div>
+              <h3>Drag & Drop PDF Here</h3>
+              <p>or</p>
+              <label className="file-input-label">
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={handleFileSelect}
+                  disabled={uploading}
+                />
+                <span className="btn btn-primary">Choose File</span>
+              </label>
+              {selectedFile && (
+                <div className="selected-file">
+                  <span>📄 {selectedFile.name}</span>
+                  <span className="file-size">
+                    ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {uploading && (
+              <div className="upload-progress">
+                <div className="progress-bar">
+                  <div
+                    className="progress-fill"
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
+                </div>
+                <p>Processing... {uploadProgress}%</p>
+              </div>
+            )}
+
+            {selectedFile && !uploading && (
+              <button className="btn btn-primary btn-upload" onClick={handleUpload}>
+                Upload & Process
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="results-section">
+            <div className="results-header">
+              <h2>📊 Results for: {results.filename}</h2>
+              <button className="btn btn-secondary" onClick={handleReset}>
+                Upload New PDF
+              </button>
+            </div>
+
+            {/* Summary Section */}
+            <div className="card summary-card">
+              <h3>📝 Summary</h3>
+              <div className="summary-content">
+                <div className="summary-short">
+                  <h4>Short Summary</h4>
+                  <p>{results.summary.short || 'Summary generated from your PDF content.'}</p>
+                </div>
+                {results.summary.keyPoints && results.summary.keyPoints.length > 0 && (
+                  <div className="summary-detailed">
+                    <h4>Key Points</h4>
+                    <ul>
+                      {results.summary.keyPoints.map((point, index) => (
+                        <li key={index}>{point}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {results.summary.topics && results.summary.topics.length > 0 && (
+                  <div className="summary-topics">
+                    <h4>Main Topics</h4>
+                    <div className="topics-list">
+                      {results.summary.topics.map((topic, index) => (
+                        <span key={index} className="topic-tag">{topic}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Quiz Section */}
+            <div className="card quiz-card">
+              <h3>📝 Quiz ({results.quiz.questions.length} Questions)</h3>
+              
+              {!quizSubmitted ? (
+                <>
+                  <div className="quiz-questions">
+                    {results.quiz.questions.map((question, index) => (
+                      <div key={question.id} className="question-item">
+                        <h4>Question {index + 1}</h4>
+                        <p className="question-text">{question.question}</p>
+                        {question.topic && (
+                          <p className="question-topic">Topic: {question.topic}</p>
+                        )}
+                        <div className="options">
+                          {question.options.map((option, optIndex) => (
+                            <label key={optIndex} className="option-label">
+                              <input
+                                type="radio"
+                                name={question.id}
+                                value={option}
+                                checked={quizAnswers[question.id] === option}
+                                onChange={() => handleAnswerSelect(question.id, option)}
+                              />
+                              <span>{option}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    className="btn btn-primary btn-submit-quiz"
+                    onClick={handleSubmitQuiz}
+                    disabled={Object.keys(quizAnswers).length !== results.quiz.questions.length}
+                  >
+                    Submit Quiz
+                  </button>
+                </>
+              ) : (
+                <div className="quiz-results">
+                  <div className="results-summary">
+                    <div className="score-display">
+                      <div className="score-circle">
+                        <span className="score-percentage">{quizResults.progress.percentage}%</span>
+                      </div>
+                      <p className="score-text">
+                        {quizResults.progress.score}/{quizResults.progress.totalQuestions} Correct
+                      </p>
+                      <p className="level-badge">Level: {quizResults.progress.level}</p>
+                    </div>
+
+                    {/* Progress Analysis */}
+                    <div className="progress-analysis">
+                      <h4>📊 Progress Analysis</h4>
+                      <div className="progress-bar-container">
+                        <div className="progress-bar">
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${quizResults.progress.percentage}%` }}
+                          ></div>
+                        </div>
+                        <span>{quizResults.progress.percentage}%</span>
+                      </div>
+
+                      {quizResults.progress.strongTopics.length > 0 && (
+                        <div className="topics-section strong">
+                          <h5>✅ Strong Topics</h5>
+                          <div className="topics-list">
+                            {quizResults.progress.strongTopics.map((topic, index) => (
+                              <span key={index} className="topic-tag strong">{topic}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {quizResults.progress.weakTopics.length > 0 && (
+                        <div className="topics-section weak">
+                          <h5>📌 Weak Topics</h5>
+                          <div className="topics-list">
+                            {quizResults.progress.weakTopics.map((topic, index) => (
+                              <span key={index} className="topic-tag weak">{topic}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Mentor Suggestions */}
+                    <div className="mentor-suggestions">
+                      <h4>💡 Mentor Suggestions</h4>
+                      
+                      {quizResults.mentorSuggestions.revisionTopics.length > 0 && (
+                        <div className="suggestion-section">
+                          <h5>Topics to Revise</h5>
+                          <ul>
+                            {quizResults.mentorSuggestions.revisionTopics.map((topic, index) => (
+                              <li key={index}>{topic}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      <div className="suggestion-section">
+                        <h5>Study Strategy</h5>
+                        <ul>
+                          {quizResults.mentorSuggestions.studyStrategy.map((strategy, index) => (
+                            <li key={index}>{strategy}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="suggestion-section">
+                        <h5>Recommendations</h5>
+                        <ul>
+                          {quizResults.mentorSuggestions.recommendations.map((rec, index) => (
+                            <li key={index}>{rec}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Professional Mentor Guidance */}
+                      {quizResults.mentorSuggestions.mentorGuidance && 
+                       quizResults.mentorSuggestions.mentorGuidance.length > 0 && (
+                        <div className="suggestion-section mentor-guidance">
+                          <h5>📋 Detailed Guidance</h5>
+                          {quizResults.mentorSuggestions.mentorGuidance.map((guidance, index) => (
+                            <div key={index} className="guidance-item">
+                              <div className="guidance-topic">
+                                <strong>{guidance.topic}</strong>
+                              </div>
+                              <div className="guidance-explanation">
+                                {guidance.explanation}
+                              </div>
+                              <div className="guidance-recommendation">
+                                <span className="recommendation-label">Recommended Action:</span>
+                                {guidance.recommendation}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Clean Learning Resources */}
+                      {quizResults.mentorSuggestions.learningResources && 
+                       quizResults.mentorSuggestions.learningResources.length > 0 && (
+                        <div className="suggestion-section learning-resources-clean">
+                          <h5>📚 Learning Resources</h5>
+                          <p className="resources-intro-clean">
+                            Strengthen your understanding with these curated resources for each topic:
+                          </p>
+                          
+                          {quizResults.mentorSuggestions.learningResources.map((resource, index) => (
+                            <div key={index} className="resource-item-clean">
+                              <div className="resource-topic-clean">
+                                <strong>📌 {resource.topic}</strong>
+                              </div>
+                              <div className="resource-links-clean">
+                                <a 
+                                  href={resource.youtubeLink} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="resource-link-clean youtube-link-clean"
+                                  title={`Watch tutorials about ${resource.topic}`}
+                                >
+                                  <span className="link-icon-clean">▶️</span>
+                                  <span>Watch YouTube Tutorials</span>
+                                </a>
+                                <a 
+                                  href={resource.googleArticleLink} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="resource-link-clean google-link-clean"
+                                  title={`Read articles about ${resource.topic}`}
+                                >
+                                  <span className="link-icon-clean">📖</span>
+                                  <span>Read Articles & Guides</span>
+                                </a>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </StudentLayout>
+  );
+};
+
+export default UploadPdfPage;

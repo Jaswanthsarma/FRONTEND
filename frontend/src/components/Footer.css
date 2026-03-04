@@ -1,0 +1,43 @@
+.app-footer {
+  background: #2c3e50;
+  color: #ecf0f1;
+  padding: 1.5rem 2rem;
+  text-align: center;
+  margin-top: auto;
+  border-top: 3px solid #3498db;
+  width: 100%;
+}
+
+.footer-content {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.footer-text {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #bdc3c7;
+}
+
+.footer-link {
+  color: #3498db;
+  text-decoration: none;
+  transition: color 0.3s ease;
+  margin: 0 0.25rem;
+}
+
+.footer-link:hover {
+  color: #5dade2;
+  text-decoration: underline;
+}
+
+/* Ensure pages have proper layout for footer */
+.page-with-footer {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-content {
+  flex: 1;
+}
